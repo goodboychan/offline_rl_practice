@@ -42,8 +42,8 @@ class ReplayBuffer(object):
 		self.size = self.state.shape[0]
 
 	def normalize_states(self, eps = 1e-3):
-		mean = self.state.mean(0,keepdims=True)
-		std = self.state.std(0,keepdims=True) + eps
-		self.state = (self.state - mean)/std
-		self.next_state = (self.next_state - mean)/std
+		mean = self.state.mean(0, keepdims=True)
+		std = self.state.std(0, keepdims=True) + eps
+		self.state = (self.state - mean) / std
+		self.next_state = (self.next_state - mean) / std
 		return mean, std
