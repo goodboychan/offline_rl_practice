@@ -9,12 +9,10 @@ import numpy as np
 import agent
 import memory
 from tqdm import tqdm
-
-from absl import flags
-from absl import app
+from absl import flags, app
 
 FLAGS = flags.FLAGS
-flags.DEFINE_string('env', 'hopper-random-v0', 'Environment name')
+flags.DEFINE_string('env', 'walker2d-medium-v0', 'Environment name')
 flags.DEFINE_integer('seed', 0, 'Seed for random number generators')
 flags.DEFINE_float('max_timesteps', 1e6, "Max time steps")
 flags.DEFINE_integer('batch_size', 256, "batch size for both actor and critic")
