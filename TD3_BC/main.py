@@ -53,7 +53,7 @@ def main(argv):
     action_dim = env.action_space.shape[0]
     max_action = float(env.action_space.high[0])
 
-    # Argments
+    # Arguments
     kwags = {
         'state_dim': state_dim,
         'action_dim': action_dim,

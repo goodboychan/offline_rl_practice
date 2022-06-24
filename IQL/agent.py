@@ -17,16 +17,16 @@ class Actor(tf.keras.Model):
         self.temperature = temperature
         self.tanh_squash_distribution = tanh_squash_distribution
 
-        self.l1 = Dense(256, activation='relu', input_shape=(state_dim, ), kernel_initializer=Orthogonal(scale=np.sqrt(2)))
-        self.l2 = Dense(256, activation='relu', kernel_initializer=Orthogonal(scale=np.sqrt(2)))
+        self.l1 = Dense(256, activation='relu', input_shape=(state_dim, ), kernel_initializer=Orthogonal(gain=np.sqrt(2)))
+        self.l2 = Dense(256, activation='relu', kernel_initializer=Orthogonal(gain=np.sqrt(2)))
     
         if not self.tanh_squash_distribution:
-            self.means = Dense(action_dim, kernel_initializer=Orthogonal(scale=np.sqrt(2)), activation='tanh')
+            self.means = Dense(action_dim, kernel_initializer=Orthogonal(gain=np.sqrt(2)), activation='tanh')
         else:
-            self.means = Dense(action_dim, kernel_initializer=Orthogonal(scale=np.sqrt(2)))            
+            self.means = Dense(action_dim, kernel_initializer=Orthogonal(gain=np.sqrt(2)))            
 
         if state_dependent_std:
-            self.log_stds = Dense(action_dim, kernel_initializer=Orthogonal(scale=log_std_scale))
+            self.log_stds = Dense(action_dim, kernel_initializer=Orthogonal(gain=log_std_scale))
         else:
             self.log_stds = Dense(action_dim, kernel_initializer=Zeros())
         
@@ -64,12 +64,12 @@ class Critic(tf.keras.Model):
         super().__init__()
         
         # Q1 Architecture
-        self.l1 = Dense(256, activation='relu', input_shape=(state_dim + action_dim), kernel_initializer=Orthogonal(np.sqrt(2)))
+        self.l1 = Dense(256, activation='relu', input_shape=(state_dim + action_dim, ), kernel_initializer=Orthogonal(np.sqrt(2)))
         self.l2 = Dense(256, activation='relu', kernel_initializer=Orthogonal(np.sqrt(2)))
         self.l3 = Dense(1)
 
         # Q2 Architecture
-        self.l4 = Dense(256, activation='relu', input_shape=(state_dim + action_dim), kernel_initializer=Orthogonal(np.sqrt(2)))
+        self.l4 = Dense(256, activation='relu', input_shape=(state_dim + action_dim, ), kernel_initializer=Orthogonal(np.sqrt(2)))
         self.l5 = Dense(256, activation='relu', kernel_initializer=Orthogonal(np.sqrt(2)))
         self.l6 = Dense(1)
 
@@ -98,8 +98,8 @@ def expectile_loss(diff, expectile=0.8):
     return weight * (diff ** 2)
 
 class IQL(object):
-    def __init__(self, state_dim, action_dim, actor_lr, value_lr, critic_lr, discount, tau, expectile, temperature, state_dependent_std, log_std_scale, tanh_squash_distribution):
-        self.actor = Actor(state_dim, action_dim, state_dependent_std, log_std_scale, tanh_squash_distribution)
+    def __init__(self, state_dim, action_dim,discount, tau, expectile, temperature, state_dependent_std=True, log_std_scale=1.0, tanh_squash_distribution=True, actor_lr=3e-4, value_lr=3e-4, critic_lr=3e-4):
+        self.actor = Actor(state_dim, action_dim, state_dependent_std, log_std_scale, tanh_squash_distribution, temperature)
         self.actor_optimizer = tf.keras.optimizers.Adam(learning_rate=tf.keras.optimizers.schedules.CosineDecay(-actor_lr, int(1e6)))
         
         self.critic = Critic(state_dim, action_dim)
@@ -126,7 +126,7 @@ class IQL(object):
 
         # Optimize Value network model
         grads = tape.gradient(value_loss, self.value_critic.trainable_variables)
-        self.value_optimizer.apply_graidents(zip(grads, self.value_critic.trainable_variables))
+        self.value_optimizer.apply_gradients(zip(grads, self.value_critic.trainable_variables))
 
     def update_q(self, states, actions, rewards, next_states, not_dones):
         next_v = self.value_critic(next_states)
@@ -151,15 +151,17 @@ class IQL(object):
         exp_a = tf.squeeze(tf.clip_by_value(exp_a, exp_a, 100), -1)
 
         with tf.GradientTape() as tape:
-            mu = self.actor(states)
-            actor_loss = tf.expand_dims(exp_a, -1) * tf.reduce_mean((mu - actions) ** 2)
+            dist = self.actor(states)
+            log_prob = dist.log_prob(actions)
+            actor_loss = -tf.reduce_mean(tf.expand_dims(exp_a, -1) * log_prob)
 
         grads = tape.gradient(actor_loss, self.actor.trainable_variables)
         self.actor_optimizer.apply_gradients(zip(grads, self.actor.trainable_variables))
 
-    def select_action(self, state):
+    def select_action(self, state, seed):
         state = tf.reshape(state, (1, -1))
-        return tf.squeeze(self.actor.sample_action(state), -1)
+        dist = self.actor(state)
+        return self.actor.sample_action(dist, seed)
 
     def train(self, replay_buffer, batch_size=256):
         self.total_it += 1
