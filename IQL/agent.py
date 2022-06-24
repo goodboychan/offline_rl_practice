@@ -56,7 +56,7 @@ class ValueCritic(tf.keras.Model):
         x = self.l1(state)
         x = self.l2(x)
         x = self.l3(x)
-        return tf.squeeze(x, -1)
+        return x
 
 # Double Critic 
 class Critic(tf.keras.Model):
@@ -78,18 +78,103 @@ class Critic(tf.keras.Model):
         q1 = self.l1(x)
         q1 = self.l2(q1)
         q1 = self.l3(q1)
-        q1 = tf.squeeze(q1, -1)
 
         q2 = self.l4(x)
         q2 = self.l5(q2)
         q2 = self.l6(q2)
-        q2 = tf.squeeze(q2, -1)
         return q1, q2
+
+    def Q1(self, state, action):
+        x = tf.concat([state, action], axis=-1)
+
+        x = self.l1(x)
+        x = self.l2(x)
+        q1 = self.l3(x)
+        return q1
+
+# Loss for Expectile Regression
+def expectile_loss(diff, expectile=0.8):
+    weight = tf.where(diff > 0, expectile, (1 - expectile))
+    return weight * (diff ** 2)
 
 class IQL(object):
     def __init__(self, state_dim, action_dim, actor_lr, value_lr, critic_lr, discount, tau, expectile, temperature, state_dependent_std, log_std_scale, tanh_squash_distribution):
         self.actor = Actor(state_dim, action_dim, state_dependent_std, log_std_scale, tanh_squash_distribution)
         self.actor_optimizer = tf.keras.optimizers.Adam(learning_rate=tf.keras.optimizers.schedules.CosineDecay(-actor_lr, int(1e6)))
+        
         self.critic = Critic(state_dim, action_dim)
-        self.value_critic = ValueCritic(state_dim)
         self.critic_target = copy.deepcopy(self.critic)
+        self.critic_optimizer = tf.keras.optimizers.Adam(learning_rate=critic_lr)
+
+        self.value_critic = ValueCritic(state_dim)
+        self.value_optimizer = tf.keras.optimizers.Adam(learning_rate=value_lr)
+
+        self.discount = discount
+        self.tau = tau
+        self.temperature = temperature
+
+        self.total_it = 0
+        self.expectile = expectile
+
+    def update_v(self, states, actions):
+        q1, q2 = self.critic_target(states, actions)
+        q = tf.minimum(q1, q2)
+
+        with tf.GradientTape() as tape:
+            v = self.value_critic(states)
+            value_loss = tf.reduce_mean(expectile_loss(q - v, self.expectile))
+
+        # Optimize Value network model
+        grads = tape.gradient(value_loss, self.value_critic.trainable_variables)
+        self.value_optimizer.apply_graidents(zip(grads, self.value_critic.trainable_variables))
+
+    def update_q(self, states, actions, rewards, next_states, not_dones):
+        next_v = self.value_critic(next_states)
+        target_q = (rewards + self.discount * not_dones * next_v)
+
+        with tf.GradientTape() as tape:
+            q1, q2 = self.critic(states, actions)
+            critic_loss = tf.reduce_mean((q1 - target_q) ** 2 + (q2 - target_q) ** 2)
+
+        grads = tape.gradient(critic_loss, self.critic.trainable_variables)
+        self.critic_optimizer.apply_gradients(zip(grads, self.critic.trainable_variables))
+
+    def update_target(self):
+        for var, target_var in zip(self.critic.trainable_variables, self.critic_target.trainable_variables):
+            target_var.assign((self.tau * var + (1 - self.tau) * target_var))
+
+    def update_actor(self, states, actions):
+        v = self.value_critic(states)
+        q1, q2 = self.critic(states, actions)
+        q = tf.minimum(q1, q2)
+        exp_a = tf.exp((q - v) * self.temperature)
+        exp_a = tf.squeeze(tf.clip_by_value(exp_a, exp_a, 100), -1)
+
+        with tf.GradientTape() as tape:
+            mu = self.actor(states)
+            actor_loss = tf.expand_dims(exp_a, -1) * tf.reduce_mean((mu - actions) ** 2)
+
+        grads = tape.gradient(actor_loss, self.actor.trainable_variables)
+        self.actor_optimizer.apply_gradients(zip(grads, self.actor.trainable_variables))
+
+    def select_action(self, state):
+        state = tf.reshape(state, (1, -1))
+        return tf.squeeze(self.actor.sample_action(state), -1)
+
+    def train(self, replay_buffer, batch_size=256):
+        self.total_it += 1
+
+        # Sample replay buffer
+        state, action, next_state, reward, not_done = replay_buffer.sample(batch_size)
+
+        # Update
+        self.update_v(state, action)
+        self.update_actor(state, action)
+        self.update_q(state, action, reward, next_state, not_done)
+        self.update_target()
+
+    
+
+
+        
+        
