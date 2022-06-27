@@ -1,7 +1,5 @@
-from multiprocessing.sharedctypes import Value
 import numpy as np
 import copy
-from pyrsistent import l
 import tensorflow as tf
 import tensorflow_probability as tfp
 
@@ -12,10 +10,11 @@ tfd = tfp.distributions
 tfb = tfp.bijectors
 
 class Actor(tf.keras.Model):
-    def __init__(self, state_dim, action_dim, state_dependent_std, log_std_scale, tanh_squash_distribution, temperature):
+    def __init__(self, state_dim, action_dim, state_dependent_std, log_std_scale, tanh_squash_distribution, temperature, seed):
         super().__init__()
         self.temperature = temperature
         self.tanh_squash_distribution = tanh_squash_distribution
+        self.seed = seed
 
         self.l1 = Dense(256, activation='relu', input_shape=(state_dim, ), kernel_initializer=Orthogonal(gain=np.sqrt(2)))
         self.l2 = Dense(256, activation='relu', kernel_initializer=Orthogonal(gain=np.sqrt(2)))
@@ -40,8 +39,8 @@ class Actor(tf.keras.Model):
             output = tfd.TransformedDistribution(distribution=output, bijector=tfb.Tanh())
         return output
 
-    def sample_action(self, dist, seed):
-        return dist.sample(seed)
+    def sample_action(self, seed):
+        return self.dist.sample(seed)
 
 # Value Critic
 class ValueCritic(tf.keras.Model):
@@ -98,8 +97,11 @@ def expectile_loss(diff, expectile=0.8):
     return weight * (diff ** 2)
 
 class IQL(object):
-    def __init__(self, state_dim, action_dim,discount, tau, expectile, temperature, state_dependent_std=True, log_std_scale=1.0, tanh_squash_distribution=True, actor_lr=3e-4, value_lr=3e-4, critic_lr=3e-4):
-        self.actor = Actor(state_dim, action_dim, state_dependent_std, log_std_scale, tanh_squash_distribution, temperature)
+    def __init__(self, state_dim, action_dim, discount, tau, expectile, 
+                 temperature, state_dependent_std=True, log_std_scale=1.0, tanh_squash_distribution=True, 
+                 actor_lr=3e-4, value_lr=3e-4, critic_lr=3e-4, seed=42):
+        self.actor = Actor(state_dim, action_dim, state_dependent_std, log_std_scale, 
+                           tanh_squash_distribution, temperature, seed)
         self.actor_optimizer = tf.keras.optimizers.Adam(learning_rate=tf.keras.optimizers.schedules.CosineDecay(-actor_lr, int(1e6)))
         
         self.critic = Critic(state_dim, action_dim)
@@ -128,14 +130,15 @@ class IQL(object):
         grads = tape.gradient(value_loss, self.value_critic.trainable_variables)
         self.value_optimizer.apply_gradients(zip(grads, self.value_critic.trainable_variables))
 
-    def update_q(self, states, actions, rewards, next_states, not_dones):
+    def update_q(self, states, actions, rewards, next_states, dones):
         next_v = self.value_critic(next_states)
-        target_q = (rewards + self.discount * not_dones * next_v)
+        target_q = (rewards + self.discount * (1 - dones) * next_v)
 
         with tf.GradientTape() as tape:
             q1, q2 = self.critic(states, actions)
             critic_loss = tf.reduce_mean((q1 - target_q) ** 2 + (q2 - target_q) ** 2)
 
+        # Update critic network model
         grads = tape.gradient(critic_loss, self.critic.trainable_variables)
         self.critic_optimizer.apply_gradients(zip(grads, self.critic.trainable_variables))
 
@@ -143,31 +146,34 @@ class IQL(object):
         for var, target_var in zip(self.critic.trainable_variables, self.critic_target.trainable_variables):
             target_var.assign((self.tau * var + (1 - self.tau) * target_var))
 
+    # AWR Update
     def update_actor(self, states, actions):
         v = self.value_critic(states)
         q1, q2 = self.critic(states, actions)
         q = tf.minimum(q1, q2)
         exp_a = tf.exp((q - v) * self.temperature)
-        exp_a = tf.squeeze(tf.clip_by_value(exp_a, exp_a, 100), -1)
+        exp_a = tf.clip_by_value(exp_a, exp_a, 100)
 
         with tf.GradientTape() as tape:
             dist = self.actor(states)
             log_prob = dist.log_prob(actions)
-            actor_loss = -tf.reduce_mean(tf.expand_dims(exp_a, -1) * log_prob)
-
+            actor_loss = -tf.reduce_mean(exp_a * log_prob)
+        
+        # Update policy network
         grads = tape.gradient(actor_loss, self.actor.trainable_variables)
         self.actor_optimizer.apply_gradients(zip(grads, self.actor.trainable_variables))
 
     def select_action(self, state, seed):
         state = tf.reshape(state, (1, -1))
         dist = self.actor(state)
-        return self.actor.sample_action(dist, seed)
+        return self.actor.sample_action(seed)
 
     def train(self, replay_buffer, batch_size=256):
         self.total_it += 1
 
         # Sample replay buffer
         state, action, next_state, reward, not_done = replay_buffer.sample(batch_size)
+        # print(action.shape)
 
         # Update
         self.update_v(state, action)

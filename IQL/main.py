@@ -17,7 +17,7 @@ flags.DEFINE_float('max_timesteps', 1e6, "Max time steps")
 flags.DEFINE_integer("eval_episodes", 10, "Evaluation Episode")
 flags.DEFINE_integer('batch_size', 256, "batch size for both actor and critic")
 flags.DEFINE_integer('log_freq', int(1e3), 'logging frequency')
-flags.DEFINE_float('eval_freq', 5e3, "evaluation frequency")
+flags.DEFINE_float('eval_freq', 100, "evaluation frequency")
 flags.DEFINE_float("temperature", 3.0, "temperature")
 flags.DEFINE_float("expectile", 0.7, "expectile")
 flags.DEFINE_float("tau", 0.005, "tau")
@@ -26,25 +26,25 @@ flags.DEFINE_float("discount", 0.99, "Discount factor")
 # Runs policy for X episodes and returns D4RL score
 # A fixed seed is used for the eval environment
 def eval_policy(policy, env_name, seed, mean, std, seed_offset=100, eval_episodes=10):
-	eval_env = gym.make(env_name)
-	eval_env.seed(seed + seed_offset)
+    eval_env = gym.make(env_name)
+    eval_env.seed(seed + seed_offset)
 
-	avg_reward = 0.
-	for _ in range(eval_episodes):
-		state, done = eval_env.reset(), False
-		while not done:
-			state = (np.array(state).reshape(1,-1) - mean)/std
-			action = policy.select_action(state, seed)
-			state, reward, done, _ = eval_env.step(action)
-			avg_reward += reward
+    avg_reward = 0.
+    for _ in range(eval_episodes):
+        state, done = eval_env.reset(), False
+        while not done:
+            action = policy.select_action(state, seed)
+            print(action.shape)
+            state, reward, done, _ = eval_env.step(action)
+            avg_reward += reward
 
-	avg_reward /= eval_episodes
-	d4rl_score = eval_env.get_normalized_score(avg_reward) * 100
+    avg_reward /= eval_episodes
+    d4rl_score = eval_env.get_normalized_score(avg_reward) * 100
 
-	print("---------------------------------------")
-	print(f"Evaluation over {eval_episodes} episodes: {avg_reward:.3f}, D4RL score: {d4rl_score:.3f}")
-	print("---------------------------------------")
-	return d4rl_score
+    print("---------------------------------------")
+    print(f"Evaluation over {eval_episodes} episodes: {avg_reward:.3f}, D4RL score: {d4rl_score:.3f}")
+    print("---------------------------------------")
+    return d4rl_score
 
 
 def main(argv):
@@ -58,8 +58,8 @@ def main(argv):
     np.random.seed(FLAGS.seed)
 
     # Get Information
-    state_dim = env.observation_space.shape[0]
-    action_dim = env.action_space.shape[0]
+    state_dim = env.observation_space.shape[-1]
+    action_dim = env.action_space.shape[-1]
 
     # Arguments
     kwargs = {
@@ -69,6 +69,7 @@ def main(argv):
         'tau': FLAGS.tau,
         'temperature': FLAGS.temperature,
         'expectile': FLAGS.expectile,
+        'seed': FLAGS.seed
     }
 
     policy = agent.IQL(**kwargs)
