@@ -17,7 +17,7 @@ flags.DEFINE_float('max_timesteps', 1e6, "Max time steps")
 flags.DEFINE_integer("eval_episodes", 10, "Evaluation Episode")
 flags.DEFINE_integer('batch_size', 256, "batch size for both actor and critic")
 flags.DEFINE_integer('log_freq', int(1e3), 'logging frequency')
-flags.DEFINE_float('eval_freq', 100, "evaluation frequency")
+flags.DEFINE_float('eval_freq', 10, "evaluation frequency")
 flags.DEFINE_float("temperature", 3.0, "temperature")
 flags.DEFINE_float("expectile", 0.7, "expectile")
 flags.DEFINE_float("tau", 0.005, "tau")
@@ -58,8 +58,9 @@ def main(argv):
     np.random.seed(FLAGS.seed)
 
     # Get Information
-    state_dim = env.observation_space.shape[-1]
-    action_dim = env.action_space.shape[-1]
+    state_dim = env.observation_space.shape[0]
+    action_dim = env.action_space.shape[0]
+    print(state_dim, action_dim)
 
     # Arguments
     kwargs = {

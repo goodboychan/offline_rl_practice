@@ -37,6 +37,7 @@ class Actor(tf.keras.Model):
         output = tfd.MultivariateNormalDiag(loc=means, scale_diag=tf.exp(log_stds) * self.temperature)
         if self.tanh_squash_distribution:
             output = tfd.TransformedDistribution(distribution=output, bijector=tfb.Tanh())
+        self.dist = output
         return output
 
     def sample_action(self, seed):
@@ -152,7 +153,7 @@ class IQL(object):
         q1, q2 = self.critic(states, actions)
         q = tf.minimum(q1, q2)
         exp_a = tf.exp((q - v) * self.temperature)
-        exp_a = tf.clip_by_value(exp_a, exp_a, 100)
+        exp_a = tf.squeeze(tf.clip_by_value(exp_a, exp_a, 100), -1)
 
         with tf.GradientTape() as tape:
             dist = self.actor(states)
@@ -164,7 +165,6 @@ class IQL(object):
         self.actor_optimizer.apply_gradients(zip(grads, self.actor.trainable_variables))
 
     def select_action(self, state, seed):
-        state = tf.reshape(state, (1, -1))
         dist = self.actor(state)
         return self.actor.sample_action(seed)
 
@@ -172,13 +172,12 @@ class IQL(object):
         self.total_it += 1
 
         # Sample replay buffer
-        state, action, next_state, reward, not_done = replay_buffer.sample(batch_size)
-        # print(action.shape)
+        states, actions, next_states, rewards, dones = replay_buffer.sample(batch_size)
 
         # Update
-        self.update_v(state, action)
-        self.update_actor(state, action)
-        self.update_q(state, action, reward, next_state, not_done)
+        self.update_v(states, actions)
+        self.update_actor(states, actions)
+        self.update_q(states, actions, rewards, next_states, dones)
         self.update_target()
 
     
