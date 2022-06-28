@@ -37,8 +37,8 @@ class Actor(tf.keras.Model):
         x = tfd.MultivariateNormalDiag(loc=self.means(x), scale_diag=tf.exp(self.log_stds(x)) * self.temperature)
         if self.tanh_squash_distribution:
             x = tfd.TransformedDistribution(distribution=x, bijector=tfb.Tanh())
-        x
         return x
+        
     @tf.function
     def sample_action(self, dist, seed):
         return dist.sample(seed=seed)
@@ -169,7 +169,7 @@ class IQL(object):
 
     def select_action(self, state, seed):
         dist = self.actor(state)
-        return tf.reshape(self.actor.sample_action(dist, seed), (-1, ))
+        return np.clip(tf.reshape(self.actor.sample_action(dist, seed), (-1, )), -1, 1)
 
     def train(self, replay_buffer, batch_size=256):
         self.total_it += 1
