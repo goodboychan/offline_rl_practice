@@ -41,7 +41,7 @@ class Actor(tf.keras.Model):
         return output
 
     def sample_action(self, seed):
-        return self.dist.sample(seed)
+        return self.dist.sample(seed=seed)
 
 # Value Critic
 class ValueCritic(tf.keras.Model):
@@ -99,7 +99,7 @@ def expectile_loss(diff, expectile=0.8):
 
 class IQL(object):
     def __init__(self, state_dim, action_dim, discount, tau, expectile, 
-                 temperature, state_dependent_std=True, log_std_scale=1.0, tanh_squash_distribution=True, 
+                 temperature, state_dependent_std=False, log_std_scale=1e-3, tanh_squash_distribution=False, 
                  actor_lr=3e-4, value_lr=3e-4, critic_lr=3e-4, seed=42):
         self.actor = Actor(state_dim, action_dim, state_dependent_std, log_std_scale, 
                            tanh_squash_distribution, temperature, seed)
