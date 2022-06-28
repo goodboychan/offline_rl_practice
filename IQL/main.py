@@ -7,6 +7,7 @@ import numpy as np
 from tqdm import tqdm
 from absl import flags, app
 import tensorflow as tf
+import time
 
 import agent, memory
 
@@ -17,7 +18,7 @@ flags.DEFINE_float('max_timesteps', 1e6, "Max time steps")
 flags.DEFINE_integer("eval_episodes", 5, "Evaluation Episode")
 flags.DEFINE_integer('batch_size', 256, "batch size for both actor and critic")
 flags.DEFINE_integer('log_freq', int(1e3), 'logging frequency')
-flags.DEFINE_float('eval_freq', 5e3, "evaluation frequency")
+flags.DEFINE_float('eval_freq', 1e3, "evaluation frequency")
 flags.DEFINE_float("temperature", 3.0, "temperature")
 flags.DEFINE_float("expectile", 0.7, "expectile")
 flags.DEFINE_float("tau", 0.005, "tau")
@@ -31,13 +32,13 @@ def eval_policy(policy, env_name, seed, mean, std, seed_offset=100, eval_episode
 
     avg_reward = 0.
     for _ in range(eval_episodes):
-        state, done = eval_env.reset()[tf.newaxis], False
+        state, done = eval_env.reset(), False
         while not done:
+            state = (np.array(state).reshape(1,-1) - mean)/std
             action = policy.select_action(state, seed)
-            action = tf.reshape(action, (eval_env.action_space.shape[0]))
             state, reward, done, _ = eval_env.step(action)
-            state = state[tf.newaxis]
             avg_reward += reward
+        print(avg_reward)
 
     avg_reward /= eval_episodes
     d4rl_score = eval_env.get_normalized_score(avg_reward) * 100

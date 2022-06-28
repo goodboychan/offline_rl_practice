@@ -28,20 +28,20 @@ class Actor(tf.keras.Model):
             self.log_stds = Dense(action_dim, kernel_initializer=Orthogonal(gain=log_std_scale))
         else:
             self.log_stds = Dense(action_dim, kernel_initializer=Zeros())
-        
+    
+    @tf.function
     def call(self, state):
         x = self.l1(state)
         x = self.l2(x)
-        log_stds = self.log_stds(x)
-        means = self.means(x)
-        output = tfd.MultivariateNormalDiag(loc=means, scale_diag=tf.exp(log_stds) * self.temperature)
+        
+        x = tfd.MultivariateNormalDiag(loc=self.means(x), scale_diag=tf.exp(self.log_stds(x)) * self.temperature)
         if self.tanh_squash_distribution:
-            output = tfd.TransformedDistribution(distribution=output, bijector=tfb.Tanh())
-        self.dist = output
-        return output
-
-    def sample_action(self, seed):
-        return self.dist.sample(seed=seed)
+            x = tfd.TransformedDistribution(distribution=x, bijector=tfb.Tanh())
+        x
+        return x
+    @tf.function
+    def sample_action(self, dist, seed):
+        return dist.sample(seed=seed)
 
 # Value Critic
 class ValueCritic(tf.keras.Model):
@@ -52,6 +52,7 @@ class ValueCritic(tf.keras.Model):
         self.l2 = Dense(256, activation='relu', kernel_initializer=Orthogonal(np.sqrt(2)))
         self.l3 = Dense(1)
 
+    @tf.function
     def call(self, state):
         x = self.l1(state)
         x = self.l2(x)
@@ -73,6 +74,7 @@ class Critic(tf.keras.Model):
         self.l5 = Dense(256, activation='relu', kernel_initializer=Orthogonal(np.sqrt(2)))
         self.l6 = Dense(1)
 
+    @tf.function
     def call(self, state, action):
         x = tf.concat([state, action], axis=-1)
         q1 = self.l1(x)
@@ -84,6 +86,7 @@ class Critic(tf.keras.Model):
         q2 = self.l6(q2)
         return q1, q2
 
+    @tf.function
     def Q1(self, state, action):
         x = tf.concat([state, action], axis=-1)
 
@@ -166,7 +169,7 @@ class IQL(object):
 
     def select_action(self, state, seed):
         dist = self.actor(state)
-        return self.actor.sample_action(seed)
+        return tf.reshape(self.actor.sample_action(dist, seed), (-1, ))
 
     def train(self, replay_buffer, batch_size=256):
         self.total_it += 1

@@ -12,7 +12,7 @@ from tqdm import tqdm
 from absl import flags, app
 
 FLAGS = flags.FLAGS
-flags.DEFINE_string('env', 'walker2d-medium-v0', 'Environment name')
+flags.DEFINE_string('env', 'halfcheetah-medium-v2', 'Environment name')
 flags.DEFINE_integer('seed', 0, 'Seed for random number generators')
 flags.DEFINE_float('max_timesteps', 1e6, "Max time steps")
 flags.DEFINE_integer('batch_size', 256, "batch size for both actor and critic")
