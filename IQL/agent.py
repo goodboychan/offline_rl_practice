@@ -33,12 +33,12 @@ class Actor(tf.keras.Model):
     def call(self, state):
         x = self.l1(state)
         x = self.l2(x)
-        
+        x = tf.clip_by_value(x, -5, 2.0)
         x = tfd.MultivariateNormalDiag(loc=self.means(x), scale_diag=tf.exp(self.log_stds(x)) * self.temperature)
         if self.tanh_squash_distribution:
             x = tfd.TransformedDistribution(distribution=x, bijector=tfb.Tanh())
         return x
-        
+
     @tf.function
     def sample_action(self, dist, seed):
         return dist.sample(seed=seed)

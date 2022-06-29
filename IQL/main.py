@@ -18,7 +18,7 @@ flags.DEFINE_float('max_timesteps', 1e6, "Max time steps")
 flags.DEFINE_integer("eval_episodes", 10, "Evaluation Episode")
 flags.DEFINE_integer('batch_size', 256, "batch size for both actor and critic")
 flags.DEFINE_integer('log_freq', int(1e3), 'logging frequency')
-flags.DEFINE_float('eval_freq', 1e2, "evaluation frequency")
+flags.DEFINE_float('eval_freq', 1e3, "evaluation frequency")
 flags.DEFINE_float("temperature", 3.0, "temperature")
 flags.DEFINE_float("expectile", 0.7, "expectile")
 flags.DEFINE_float("tau", 0.005, "tau")
@@ -38,7 +38,7 @@ def eval_policy(policy, env_name, seed, mean, std, seed_offset=100, eval_episode
             action = policy.select_action(state, seed)
             state, reward, done, _ = eval_env.step(action)
             avg_reward += reward
-        print(avg_reward)
+        # print(avg_reward)
 
     avg_reward /= eval_episodes
     d4rl_score = eval_env.get_normalized_score(avg_reward) * 100
@@ -50,6 +50,19 @@ def eval_policy(policy, env_name, seed, mean, std, seed_offset=100, eval_episode
 
 
 def main(argv):
+
+    policy = 'IQL'
+    file_name = f"{policy}_{FLAGS.env}_{FLAGS.seed}"
+    print("---------------------------------------")
+    print(f"Policy: {policy}, Env: {FLAGS.env}, Seed: {FLAGS.seed}")
+    print("---------------------------------------")
+
+    if not os.path.exists('./results'):
+        os.makedirs('./results')
+
+    if not os.path.exists('./models'):
+        os.makedirs('./models')
+
     env = gym.make(FLAGS.env)
 
     # Set seed
@@ -62,7 +75,6 @@ def main(argv):
     # Get Information
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.shape[0]
-    print(state_dim, action_dim)
 
     # Arguments
     kwargs = {
@@ -87,6 +99,7 @@ def main(argv):
 
         if (t + 1) % FLAGS.eval_freq == 0:
             evaluations.append(eval_policy(policy, FLAGS.env, FLAGS.seed, mean, std, eval_episodes=FLAGS.eval_episodes))
+            np.save(f"./results/{file_name}", evaluations)
 
 
 if __name__ == '__main__':

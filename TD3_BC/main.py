@@ -42,6 +42,18 @@ def eval_policy(policy, env_name, seed, mean, std, seed_offset=100, eval_episode
 	return d4rl_score
 
 def main(argv):
+    policy = 'TD3_BC'
+    file_name = f"{policy}_{FLAGS.env}_{FLAGS.seed}"
+    print("---------------------------------------")
+    print(f"Policy: {policy}, Env: {FLAGS.env}, Seed: {FLAGS.seed}")
+    print("---------------------------------------")
+
+    if not os.path.exists('./results'):
+        os.makedirs('./results')
+
+    if not os.path.exists('./models'):
+        os.makedirs('./models')
+
     env = gym.make(FLAGS.env)
 
     # Set seeds
@@ -78,7 +90,7 @@ def main(argv):
         policy.train(replay_buffer, FLAGS.batch_size)
         if (t + 1) % FLAGS.eval_freq == 0:
             evaluations.append(eval_policy(policy, FLAGS.env, FLAGS.seed, mean, std))
-    
+            np.save(f"./results/{file_name}", evaluations)
 
 
 if __name__ == '__main__':
