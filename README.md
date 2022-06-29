@@ -1,4 +1,4 @@
-# offline_rl_practice
+# Offline RL Practice
 A set of offline RL algorithm with tensorflow-keras. 
 - Use [D4RL](https://github.com/rail-berkeley/d4rl) dataset
 - For the purpose of result reproducibility.
