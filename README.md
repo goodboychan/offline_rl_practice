@@ -1,5 +1,8 @@
 # offline_rl_practice
-A set of offline RL algorithm with tensorflow keras
+A set of offline RL algorithm with tensorflow-keras. 
+- Use [D4RL](https://github.com/rail-berkeley/d4rl) dataset
+- For the purpose of result reproducibility.
+- Heavily borrow most test concepts from TD3+BC.
 
 ## TD3+BC 
 A Minimalist Approach to Offline RL, Fujumoto et al [[paper](https://arxiv.org/abs/2106.06860)], [[repo](https://github.com/sfujim/TD3_BC)]
