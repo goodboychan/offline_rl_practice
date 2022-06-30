@@ -171,7 +171,7 @@ class IQL(object):
 
     def select_action(self, state, seed):
         dist = self.actor(state)
-        return np.clip(tf.reshape(self.actor.sample_action(dist, seed), (-1, )), -1, 1)
+        return tf.reshape(self.actor.sample_action(dist, seed), (-1, ))
 
     def train(self, replay_buffer, batch_size=256):
         self.total_it += 1
