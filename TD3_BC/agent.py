@@ -13,6 +13,7 @@ class Actor(tf.keras.Model):
 
         self.max_action = max_action
 
+    @tf.function
     def call(self, state):
         x = self.l1(state)
         x = self.l2(x)
@@ -32,6 +33,7 @@ class Critic(tf.keras.Model):
         self.l5 = Dense(256, activation='relu')
         self.l6 = Dense(1)
 
+    @tf.function
     def call(self, state, action):
         x = tf.concat([state, action], axis=-1)
         q1 = self.l1(x)
@@ -43,6 +45,7 @@ class Critic(tf.keras.Model):
         q2 = self.l6(q2)
         return q1, q2
 
+    @tf.function
     def Q1(self, state, action):
         x = tf.concat([state, action], axis=-1)
 
@@ -75,7 +78,6 @@ class TD3_BC(object):
         state = tf.reshape(state, (1, -1))
         return tf.reshape(self.actor(state), [-1])
     
-    # @tf.function
     def train(self, replay_buffer, batch_size=256):
         self.total_it += 1
 

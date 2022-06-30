@@ -33,8 +33,7 @@ class Actor(tf.keras.Model):
     def call(self, state):
         x = self.l1(state)
         x = self.l2(x)
-        x = tf.clip_by_value(x, -5, 2.0)
-        x = tfd.MultivariateNormalDiag(loc=self.means(x), scale_diag=tf.exp(self.log_stds(x)) * self.temperature)
+        x = tfd.MultivariateNormalDiag(loc=self.means(x), scale_diag=tf.exp(self.log_stds(tf.clip_by_value(x, -10, 2.0))) * self.temperature)
         if self.tanh_squash_distribution:
             x = tfd.TransformedDistribution(distribution=x, bijector=tfb.Tanh())
         return x
@@ -144,8 +143,10 @@ class IQL(object):
 
         # Update critic network model
         grads = tape.gradient(critic_loss, self.critic.trainable_variables)
+        grads = [tf.clip_by_norm(g, 1) for g in grads]
         self.critic_optimizer.apply_gradients(zip(grads, self.critic.trainable_variables))
 
+    # Polyak Update
     def update_target(self):
         for var, target_var in zip(self.critic.trainable_variables, self.critic_target.trainable_variables):
             target_var.assign((self.tau * var + (1 - self.tau) * target_var))
@@ -156,7 +157,8 @@ class IQL(object):
         q1, q2 = self.critic(states, actions)
         q = tf.minimum(q1, q2)
         exp_a = tf.exp((q - v) * self.temperature)
-        exp_a = tf.squeeze(tf.clip_by_value(exp_a, exp_a, 100), -1)
+        # exp_a = tf.squeeze(tf.clip_by_value(exp_a, exp_a, 100), -1)
+        exp_a = tf.minimum(exp_a, 100)
 
         with tf.GradientTape() as tape:
             dist = self.actor(states)
@@ -181,10 +183,7 @@ class IQL(object):
         self.update_v(states, actions)
         self.update_actor(states, actions)
         self.update_q(states, actions, rewards, next_states, dones)
-        self.update_target()
 
-    
-
-
-        
-        
+        # Soft update
+        if self.total_it % 2 == 0:
+            self.update_target()
