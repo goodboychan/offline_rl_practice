@@ -121,6 +121,7 @@ class IQL(object):
         self.total_it = 0
         self.expectile = expectile
 
+    @tf.function
     def update_v(self, states, actions):
         q1, q2 = self.critic_target(states, actions)
         q = tf.minimum(q1, q2)
@@ -133,6 +134,7 @@ class IQL(object):
         grads = tape.gradient(value_loss, self.value_critic.trainable_variables)
         self.value_optimizer.apply_gradients(zip(grads, self.value_critic.trainable_variables))
 
+    
     def update_q(self, states, actions, rewards, next_states, dones):
         next_v = self.value_critic(next_states)
         target_q = (rewards + self.discount * (1 - dones) * next_v)
@@ -152,6 +154,7 @@ class IQL(object):
             target_var.assign((self.tau * var + (1 - self.tau) * target_var))
 
     # AWR Update
+    @tf.function
     def update_actor(self, states, actions):
         v = self.value_critic(states)
         q1, q2 = self.critic(states, actions)
@@ -171,14 +174,14 @@ class IQL(object):
 
     def select_action(self, state, seed):
         dist = self.actor(state)
-        return tf.reshape(self.actor.sample_action(dist, seed), (-1, ))
+        return tf.clip_by_value(tf.reshape(self.actor.sample_action(dist, seed), (-1, )), -1, 1)
 
     def train(self, replay_buffer, batch_size=256):
         self.total_it += 1
 
         # Sample replay buffer
         states, actions, next_states, rewards, dones = replay_buffer.sample(batch_size)
-
+        
         # Update
         self.update_v(states, actions)
         self.update_actor(states, actions)
