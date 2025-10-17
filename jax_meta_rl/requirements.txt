@@ -1,0 +1,15 @@
+# Core JAX libraries
+jax
+jaxlib
+flax
+optax
+
+# Environment
+gymnasium
+brax
+metaworld
+
+# Utilities
+matplotlib
+numpy
+scipy
