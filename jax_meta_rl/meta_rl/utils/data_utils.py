@@ -3,7 +3,7 @@ import jax.numpy as jnp
 import numpy as np
 from flax.training.common_utils import get_metrics, onehot
 
-def collect_trajectories(env, params, policy_fn, num_trajectories, max_steps, rng):
+def collect_trajectories(env, params, policy_fn, num_trajectories, max_steps, rng, action_scale=1.0):
     """
     Collects trajectories from the environment using a given policy.
     """
@@ -28,8 +28,8 @@ def collect_trajectories(env, params, policy_fn, num_trajectories, max_steps, rn
 
             # Convert to numpy for env interaction and scale action
             action_np = np.array(action)
-            # Pendulum-v1 action space is [-2, 2]
-            scaled_action_np = action_np * 2.0
+            # Scale action for the specific environment
+            scaled_action_np = action_np * action_scale
 
             next_obs, reward, terminated, truncated, _ = env.step(scaled_action_np)
             done = terminated or truncated
