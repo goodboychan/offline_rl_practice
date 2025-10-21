@@ -9,3 +9,4 @@ pytest==6.2.5
 matplotlib==3.5.1
 git+https://github.com/dennisl88/rand_param_envs.git@4d1529d61ca0d65ed4bd9207b108d4a4662a4da0#egg=rand_param_envs
 tensorboard==2.13.0
+metaworld
