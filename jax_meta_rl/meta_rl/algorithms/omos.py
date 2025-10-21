@@ -163,24 +163,28 @@ class OMOS:
     @partial(jax.jit, static_argnums=(0,))
     def outer_update(self, params, opt_state, meta_batch, rng):
 
-        def meta_loss_for_task(p, task_data):
+        def meta_loss_for_task(p, task_data, key):
             support_batch, query_batch = task_data
-            adapted_params = self.inner_update(p, support_batch, rng)
+            adapted_params = self.inner_update(p, support_batch, key)
 
-            critic_loss = self._compute_cql_loss(adapted_params, query_batch, rng)
-            actor_loss = self._compute_actor_loss(adapted_params, query_batch, rng)
+            critic_loss = self._compute_cql_loss(adapted_params, query_batch, key)
+            actor_loss = self._compute_actor_loss(adapted_params, query_batch, key)
 
             return critic_loss + actor_loss
 
         grad_fn = jax.grad(meta_loss_for_task)
-        meta_grads_batch = jax.vmap(grad_fn, in_axes=(None, 0))(params, meta_batch)
+
+        # Create a unique key for each task in the meta-batch
+        rngs = jax.random.split(rng, jax.tree_util.tree_leaves(meta_batch)[0].shape[0])
+        meta_grads_batch = jax.vmap(grad_fn, in_axes=(None, 0, 0))(params, meta_batch, rngs)
+
         meta_grads = jax.tree_util.tree_map(lambda x: jnp.mean(x, axis=0), meta_grads_batch)
 
         updates, new_opt_state = self.optimizer.update(meta_grads, opt_state)
         new_params = optax.apply_updates(params, updates)
 
         # For loss reporting
-        losses = jax.vmap(meta_loss_for_task, in_axes=(None, 0))(params, meta_batch)
+        losses = jax.vmap(meta_loss_for_task, in_axes=(None, 0, 0))(params, meta_batch, rngs)
         total_loss = jnp.mean(losses)
 
         # Update target critic params
