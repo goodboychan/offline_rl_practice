@@ -19,7 +19,8 @@ def collect_trajectories(env, params, policy_fn, num_trajectories, max_steps, rn
         }
         for _ in range(max_steps):
             rng, key = jax.random.split(rng)
-            mu, log_std, _ = policy_fn({'params': params}, obs[None, ...])
+            output = policy_fn({'params': params}, obs[None, ...])
+            mu, log_std = output[0], output[1]
             std = jnp.exp(log_std)
 
             # Sample action from Gaussian distribution
@@ -54,6 +55,7 @@ def process_trajectories(trajectories, policy_fn, params, gamma=0.99, gae_lambda
     all_advantages = []
     all_observations = []
     all_actions = []
+    all_returns = []
 
     for trajectory in trajectories:
         observations = np.array(trajectory['observations'])
@@ -62,22 +64,31 @@ def process_trajectories(trajectories, policy_fn, params, gamma=0.99, gae_lambda
         next_observations = np.array(trajectory['next_observations'])
         dones = np.array(trajectory['dones'])
 
-        *_, values = policy_fn({'params': params}, observations)
-        *_, next_values = policy_fn({'params': params}, next_observations)
-        values = np.array(values)
-        next_values = np.array(next_values)
+        output = policy_fn({'params': params}, observations)
+        values = output[2]
+        next_output = policy_fn({'params': params}, next_observations)
+        next_values = next_output[2]
+
+        values = np.array(values).squeeze()
+        next_values = np.array(next_values).squeeze()
 
         advantages = np.zeros_like(rewards)
+        returns = np.zeros_like(rewards)
         last_adv = 0
+        last_ret = 0
         for t in reversed(range(len(rewards))):
             delta = rewards[t] + gamma * next_values[t] * (1 - dones[t]) - values[t]
             advantages[t] = delta + gamma * gae_lambda * (1 - dones[t]) * last_adv
+            returns[t] = rewards[t] + gamma * (1 - dones[t]) * last_ret
             last_adv = advantages[t]
+            last_ret = returns[t]
 
         all_observations.extend(observations)
         all_actions.extend(actions)
         all_advantages.extend(advantages)
+        all_returns.extend(returns)
 
     return (jnp.array(all_observations),
             jnp.array(all_actions),
-            jnp.array(all_advantages))
+            jnp.array(all_advantages),
+            jnp.array(all_returns))
